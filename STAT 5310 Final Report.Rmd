@@ -1,0 +1,443 @@
+---
+title: "application_v3"
+author: "Yuxin Liu"
+date: "2023-12-14"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r}
+# Read library
+library(ggplot2)
+library(coda)
+
+# 1. Normal Distribution
+
+set.seed(123) # for reproducibility
+
+# Prior parameters
+mu0 <- 5
+tau2 <- 9
+
+# Sample data (example: replace with actual data)
+sample_data <- rnorm(10000, mean=5, sd=1)  # 10000 data points
+x_bar <- mean(sample_data)
+n <- length(sample_data)
+
+# Likelihood variance
+sigma2 <- 1
+
+# Posterior Mean and Variance
+mu_post <- (mu0 / tau2 + x_bar * n / sigma2) / (1 / tau2 + n / sigma2)
+sigma2_post <- 1 / (1 / tau2 + n / sigma2)
+
+sample_normal <- rnorm(10000, mean=mu_post, sd=sigma2_post)
+
+# Quantile Interval
+quantile_interval_normal <- quantile(sample_normal, probs=c(0.025, 0.975))
+
+# HPD Region using coda package
+library(coda)
+hpd_region_normal <- HPDinterval(as.mcmc(sample_normal), prob=0.95)
+
+
+# Print the Quantile Interval and HPD Region
+cat("Quantile Interval (95%):\n")
+cat("Lower Bound:", quantile_interval_normal[1], "\n")
+cat("Upper Bound:", quantile_interval_normal[2], "\n\n")
+
+cat("HPD Region (95%):\n")
+cat("Lower Bound:", hpd_region_normal[1], "\n")
+cat("Upper Bound:", hpd_region_normal[2], "\n")
+```
+
+```{r}
+# Calculating the density
+density_normal <- density(sample_normal)
+
+# Plot the density with quantile interval and HPD region
+plot(density_normal, main="Normal Posterior Distribution", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_normal$y)))
+
+# Adding colored area under the density curve
+polygon(density_normal)  # light gray with transparency
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_normal[1], quantile_interval_normal[2], length.out=length(density_normal$x))
+y_fill <- approx(density_normal$x, density_normal$y, x_fill)$y
+polygon(c(quantile_interval_normal[1], x_fill, quantile_interval_normal[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_normal[1], hpd_region_normal[2], length.out=length(density_normal$x))
+y_fill_hpd <- approx(density_normal$x, density_normal$y, x_fill_hpd)$y
+polygon(c(hpd_region_normal[1], x_fill_hpd, hpd_region_normal[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+
+# Adding quantile interval and HPD region lines
+abline(v=quantile_interval_normal, col="blue", lwd=2)
+abline(v=hpd_region_normal, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval", "HPD Region"), 
+       col=c("blue", "red"), lwd=2, cex=0.8)
+
+```
+
+```{r}
+# Plot the density with quantile interval
+plot(density_normal, main="Normal Posterior Distribution with Quantile Interval", xlab="Value", ylab="Density", type="n", ylim=c(0, max(density_normal$y)))
+
+# Adding colored area under the density curve
+polygon(density_normal)
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_normal[1], quantile_interval_normal[2], length.out=length(density_normal$x))
+y_fill <- approx(density_normal$x, density_normal$y, x_fill)$y
+polygon(c(quantile_interval_normal[1], x_fill, quantile_interval_normal[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Adding quantile interval lines
+abline(v=quantile_interval_normal, col="blue", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval"), 
+       col=c("blue"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Calculating the density with HPD Region
+density_normal <- density(sample_normal)
+
+# Plot the density
+plot(density_normal, main="Normal Posterior Distribution with HPD region", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_normal$y)))
+
+# Adding colored area under the density curve
+polygon(density_normal)
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_normal[1], hpd_region_normal[2], length.out=length(density_normal$x))
+y_fill_hpd <- approx(density_normal$x, density_normal$y, x_fill_hpd)$y
+polygon(c(hpd_region_normal[1], x_fill_hpd, hpd_region_normal[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding HPD region lines
+abline(v=hpd_region_normal, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("HPD Region"), 
+       col=c("red"), lwd=2, cex=0.8)
+```
+
+```{r}
+#2. Scaled Inverse Chi-Squared Distribution
+
+set.seed(123) # for reproducibility
+
+# Prior parameters for scaled inverse chi-squared distribution
+nu0 <- 1
+sigma0_sq <- 4
+
+# Generating sample data from a Normal distribution
+sample_mean <- 1
+sample_sd <- 1.5
+n <- 100  # sample size
+sample_data <- rnorm(n, mean=sample_mean, sd=sample_sd)
+
+# Calculating the posterior parameters
+sum_sq <- sum((sample_data - sample_mean)^2)
+nu_post <- nu0 + n
+sigma_post_sq <- (nu0 * sigma0_sq + sum_sq) / nu_post
+
+# Generate posterior distribution:
+sample_sic <- (nu_post * sigma_post_sq) / rchisq(10000, df=nu_post)  # Adjusted for scaled inverse chi-squared
+
+# Quantile Interval
+quantile_interval_sic <- quantile(sample_sic, probs=c(0.025, 0.975))
+
+# HPD Region using coda package
+hpd_region_sic <- HPDinterval(as.mcmc(sample_sic), prob=0.95)
+
+# Print the Quantile Interval and HPD Region
+cat("Quantile Intervals (95%):\n")
+cat("Lower Bound:", quantile_interval_sic[1], "\n")
+cat("Upper Bound:", quantile_interval_sic[2], "\n\n")
+
+cat("HPD Region (95%):\n")
+cat("Lower Bound:", hpd_region_sic[1], "\n")
+cat("Upper Bound:", hpd_region_sic[2], "\n")
+```
+
+```{r}
+# Calculating the density
+density_sic <- density(sample_sic)
+
+# Plot the density with quantile interval and HPD region
+plot(density_sic, main="Scaled Inverse Chi-Squared Posterior Distribution", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_sic$y)))
+
+# Adding colored area under the density curve
+polygon(density_sic)
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_sic[1], quantile_interval_sic[2], length.out=length(density_sic$x))
+y_fill <- approx(density_sic$x, density_sic$y, x_fill)$y
+polygon(c(quantile_interval_sic[1], x_fill, quantile_interval_sic[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_sic[1], hpd_region_sic[2], length.out=length(density_sic$x))
+y_fill_hpd <- approx(density_sic$x, density_sic$y, x_fill_hpd)$y
+polygon(c(hpd_region_sic[1], x_fill_hpd, hpd_region_sic[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding quantile interval and HPD region lines
+abline(v=quantile_interval_sic, col="blue", lwd=2)
+abline(v=hpd_region_sic, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval", "HPD Region"), 
+       col=c("blue", "red"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Plot the density with quantile interval
+plot(density_sic, main="Scaled Inverse Chi-Squared Posterior Distribution with Quantile Interval", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_sic$y)))
+
+# Adding colored area under the density curve
+polygon(density_sic)
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_sic[1], quantile_interval_sic[2], length.out=length(density_sic$x))
+y_fill <- approx(density_sic$x, density_sic$y, x_fill)$y
+polygon(c(quantile_interval_sic[1], x_fill, quantile_interval_sic[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Adding quantile interval lines
+abline(v=quantile_interval_sic, col="blue", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval"), 
+       col=c("blue"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Plot the density with HPD region
+plot(density_sic, main="Scaled Inverse Chi-Squared Posterior Distribution with HPD Region", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_sic$y)))
+
+# Adding colored area under the density curve
+polygon(density_sic)
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_sic[1], hpd_region_sic[2], length.out=length(density_sic$x))
+y_fill_hpd <- approx(density_sic$x, density_sic$y, x_fill_hpd)$y
+polygon(c(hpd_region_sic[1], x_fill_hpd, hpd_region_sic[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding HPD region lines
+abline(v=hpd_region_sic, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("HPD Region"), 
+       col=c("red"), lwd=2, cex=0.8)
+```
+
+```{r}
+# 3. Gamma Distribution
+
+set.seed(123) # for reproducibility
+
+# Prior parameters
+alpha_prior_gamma <- 1
+beta_prior_gamma  <- 3
+
+# Poisson data with an observed count of 2
+observed_count <- 2
+
+# Posterior parameters
+alpha_posterior_gamma <- alpha_prior_gamma + observed_count # alpha + observed count
+beta_posterior_gamma <- beta_prior_gamma + 1 # beta + 1
+
+sample_gamma <- rgamma(10000, shape=alpha_posterior_gamma, rate=beta_posterior_gamma)
+
+# Quantile Interval
+quantile_interval_gamma <- quantile(sample_gamma, probs=c(0.025, 0.975))
+
+# HPD Region using coda package
+hpd_region_gamma <- HPDinterval(as.mcmc(sample_gamma), prob=0.95)
+
+# Print the Quantile Interval and HPD Region
+cat("Quantile Intervals (95%):\n")
+cat("Lower Bound:", quantile_interval_gamma[1], "\n")
+cat("Upper Bound:", quantile_interval_gamma[2], "\n\n")
+
+cat("HPD Region (95%):\n")
+cat("Lower Bound:", hpd_region_gamma[1], "\n")
+cat("Upper Bound:", hpd_region_gamma[2], "\n")
+```
+
+```{r}
+# Calculating the density
+density_gamma <- density(sample_gamma)
+
+# Plot the density with quantile interval and HPD region 
+plot(density_gamma, main="Gamma Posterior Distribution", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_gamma$y)))
+
+# Adding colored area under the density curve
+polygon(density_gamma)  
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_gamma[1], quantile_interval_gamma[2], length.out=length(density_gamma$x))
+y_fill <- approx(density_gamma$x, density_gamma$y, x_fill)$y
+polygon(c(quantile_interval_gamma[1], x_fill, quantile_interval_gamma[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_gamma[1], hpd_region_gamma[2], length.out=length(density_gamma$x))
+y_fill_hpd <- approx(density_gamma$x, density_gamma$y, x_fill_hpd)$y
+polygon(c(hpd_region_gamma[1], x_fill_hpd, hpd_region_gamma[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding quantile interval and HPD region lines
+abline(v=quantile_interval_gamma, col="blue", lwd=2)
+abline(v=hpd_region_gamma, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval", "HPD Region"), 
+       col=c("blue", "red"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Plot the density with quantile interval
+plot(density_gamma, main="Gamma Posterior Distribution with Quantile Interval", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_gamma$y)))
+
+# Adding colored area under the density curve
+polygon(density_gamma) 
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_gamma[1], quantile_interval_gamma[2], length.out=length(density_gamma$x))
+y_fill <- approx(density_gamma$x, density_gamma$y, x_fill)$y
+polygon(c(quantile_interval_gamma[1], x_fill, quantile_interval_gamma[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Adding quantile interval lines
+abline(v=quantile_interval_gamma, col="blue", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval"), 
+       col=c("blue"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Plot the density with HPD region
+plot(density_gamma, main="Gamma Posterior Distribution with HPD Region", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_gamma$y)))
+
+# Adding colored area under the density curve
+polygon(density_gamma)  
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_gamma[1], hpd_region_gamma[2], length.out=length(density_gamma$x))
+y_fill_hpd <- approx(density_gamma$x, density_gamma$y, x_fill_hpd)$y
+polygon(c(hpd_region_gamma[1], x_fill_hpd, hpd_region_gamma[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding HPD region lines
+abline(v=hpd_region_gamma, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("HPD Region"), 
+       col=c("red"), lwd=2, cex=0.8)
+```
+
+```{r}
+# 4. Beta Distribution
+set.seed(123) # for reproducibility
+
+# Prior parameters
+alpha_prior_beta <- 1
+beta_prior_beta <- 2
+
+# Data: 2 successes in 10 trials
+successes <- 2
+trials <- 10
+
+# Posterior parameters
+alpha_posterior_beta <- alpha_prior_beta + successes
+beta_posterior_beta <- beta_prior_beta + trials - successes
+
+# Generate the Beta porsteior distribution
+sample_beta <- rbeta(10000, shape1=alpha_posterior_beta, shape2=beta_posterior_beta)
+
+# Quantile Interval
+quantile_interval_beta <- quantile(sample_beta, probs=c(0.025, 0.975))
+
+# HPD Region using coda package
+hpd_region_beta <- HPDinterval(as.mcmc(sample_beta), prob=0.95)
+
+# Print the Quantile Intervals and HPD Region
+cat("Quantile Intervals (95%):\n")
+cat("Lower Bound:", quantile_interval_beta[1], "\n")
+cat("Upper Bound:", quantile_interval_beta[2], "\n\n")
+
+cat("HPD Region (95%):\n")
+cat("Lower Bound:", hpd_region_beta[1], "\n")
+cat("Upper Bound:", hpd_region_beta[2], "\n")
+```
+
+```{r}
+# Calculating the density 
+density_beta <- density(sample_beta)
+
+# Plot the density with quantile interval and HPD region
+plot(density_beta, main="Beta Posterior Distribution", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_beta$y)))
+
+# Adding colored area under the density curve
+polygon(density_beta) 
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_beta[1], quantile_interval_beta[2], length.out=length(density_beta$x))
+y_fill <- approx(density_beta$x, density_beta$y, x_fill)$y
+polygon(c(quantile_interval_beta[1], x_fill, quantile_interval_beta[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_beta[1], hpd_region_beta[2], length.out=length(density_beta$x))
+y_fill_hpd <- approx(density_beta$x, density_beta$y, x_fill_hpd)$y
+polygon(c(hpd_region_beta[1], x_fill_hpd, hpd_region_beta[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding quantile interval and HPD region lines
+abline(v=quantile_interval_beta, col="blue", lwd=2)
+abline(v=hpd_region_beta, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval", "HPD Region"), 
+       col=c("blue", "red"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Plot the density with quantile interval
+plot(density_beta, main="Beta Posterior Distribution with Quantile Interval", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_beta$y)))
+
+# Adding colored area under the density curve
+polygon(density_beta) 
+
+# Highlighting the area between quantile interval
+x_fill <- seq(quantile_interval_beta[1], quantile_interval_beta[2], length.out=length(density_beta$x))
+y_fill <- approx(density_beta$x, density_beta$y, x_fill)$y
+polygon(c(quantile_interval_beta[1], x_fill, quantile_interval_beta[2]), c(0, y_fill, 0), col=rgb(173, 216, 230, maxColorValue=255, alpha=100), border=NA)  # light blue with transparency
+
+# Adding quantile interval lines
+abline(v=quantile_interval_beta, col="blue", lwd=2)
+
+# Add legend
+legend("topright", legend=c("Quantile Interval"), 
+       col=c("blue"), lwd=2, cex=0.8)
+```
+
+```{r}
+# Plot the density with HPD region
+plot(density_beta, main="Beta Posterior Distribution with HPD Region", xlab="Value", ylab="Density", type="n", col="grey", ylim=c(0, max(density_beta$y)))
+
+# Adding colored area under the density curve
+polygon(density_beta) 
+
+# Highlighting the area between HPD region
+x_fill_hpd <- seq(hpd_region_beta[1], hpd_region_beta[2], length.out=length(density_beta$x))
+y_fill_hpd <- approx(density_beta$x, density_beta$y, x_fill_hpd)$y
+polygon(c(hpd_region_beta[1], x_fill_hpd, hpd_region_beta[2]), c(0, y_fill_hpd, 0), col=rgb(255, 182, 193, maxColorValue=255, alpha=100), border=NA)  # light pink with transparency
+
+# Adding HPD region lines
+abline(v=hpd_region_beta, col="red", lwd=2)
+
+# Add legend
+legend("topright", legend=c("HPD Region"), 
+       col=c("red"), lwd=2, cex=0.8)
+```
+
